@@ -1,9 +1,79 @@
-import type { NextPage } from 'next'
-import Head from 'next/head'
-import Image from 'next/image'
-import styles from '../styles/Home.module.css'
+import type { NextPage } from "next";
+import Head from "next/head";
+import { auth, db, functions } from "../libs/firebase";
+import styles from "../styles/Home.module.css";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { useEffect, useState } from "react";
+import { videoIndex, videoIndexAsc } from "../libs/algolia";
+import { Video } from "../types/Video";
+import { User } from "../types/User";
+import { debounce } from "debounce";
+import { SearchIndex } from "algoliasearch/lite";
+import { httpsCallable } from "firebase/functions";
+import { getDoc, doc } from "firebase/firestore";
+import { useAuth } from "../libs/userContext";
+
+type SearchRespons = {
+  nbHits: number;
+  hits: Video[];
+};
 
 const Home: NextPage = () => {
+  const [index, setIndex] = useState<SearchIndex>(videoIndex);
+  const [searchResult, setSearchResult] = useState<SearchRespons>();
+
+  // 箱の中身を取り出している
+  const { user } = useAuth();
+
+  const signIn = () => {
+    signInAnonymously(auth).then(() => {
+      alert("login成功");
+    });
+  };
+
+  const signOut = () => {
+    auth.signOut();
+  };
+
+  const changeIndex = (value: string) => {
+    switch (value) {
+      case "desc":
+        setIndex(videoIndex);
+        break;
+      case "asc":
+        setIndex(videoIndexAsc);
+        break;
+    }
+  };
+
+  const search = debounce((value: string) => {
+    index.search<Video>(value).then(({ nbHits, hits }) => {
+      setSearchResult({
+        nbHits,
+        hits,
+      });
+    });
+  }, 500);
+
+  useEffect(() => {
+    search("");
+  }, [index]);
+
+  useEffect(() => {
+    search("");
+  }, []);
+
+  useEffect(() => {
+    console.log(user, "check");
+  }, [user]);
+
+  const getCheckoutURL = () => {
+    const callable = httpsCallable(functions, "getCheckoutURL");
+    callable({ cid: user?.customerId }).then(({ data: url }) => {
+      window.open(url as string);
+    });
+  };
+
   return (
     <div className={styles.container}>
       <Head>
@@ -12,61 +82,45 @@ const Home: NextPage = () => {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
+      <main>
+        {user && <p>顧客ID{user.customerId}さんこんにちは</p>}
+        {user && user?.premium ? <p>有料プラン</p> : <p>無料プラン</p>}
+        {user ? (
+          <button onClick={signOut}>ログアウト</button>
+        ) : (
+          <button onClick={signIn}>ログイン</button>
+        )}
+        <h2>検索</h2>
+        <select onChange={(e) => changeIndex(e.target.value)}>
+          <option value="desc">再生時間長い順</option>
+          <option value="asc">再生時間短い順</option>
+        </select>
 
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
+        <p>{searchResult?.nbHits}件ヒット</p>
+        <ul>
+          {searchResult?.hits.map((video) => {
+            return (
+              <li key={video.title}>
+                {video.title} (再生時間{video.minutes}分)
+              </li>
+            );
+          })}
+        </ul>
+        <input
+          type="text"
+          placeholder="作品タイトル"
+          onChange={(e) => search(e.target.value)}
+        />
 
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h2>Documentation &rarr;</h2>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h2>Learn &rarr;</h2>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h2>Examples &rarr;</h2>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h2>Deploy &rarr;</h2>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
+        {user && (
+          <div>
+            <p>プレミアムプラン: 月額980円</p>
+            <button onClick={getCheckoutURL}>課金スタート</button>
+          </div>
+        )}
       </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <span className={styles.logo}>
-            <Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />
-          </span>
-        </a>
-      </footer>
     </div>
-  )
-}
+  );
+};
 
-export default Home
+export default Home;
