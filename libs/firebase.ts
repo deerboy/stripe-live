@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD-bM5HUTYC13ZqatG6C7-5afM0ZCozoKM",
@@ -16,6 +17,9 @@ const app = initializeApp(firebaseConfig);
 
 // 認証
 export const auth = getAuth();
+
+// ストレージ
+export const storage = getStorage(app);
 
 // データベース
 export const db = getFirestore();
